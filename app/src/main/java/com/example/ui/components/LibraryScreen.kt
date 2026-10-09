@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -82,6 +86,10 @@ fun LibraryScreen(
     onRemoveFromPlaylist: (Playlist, String) -> Unit,
     onShareClick: (Track) -> Unit,
     onScanDeviceAudio: () -> Unit,
+    onImportAudioFiles: (List<Uri>) -> Unit = {},
+    isScanningDevice: Boolean = false,
+    scanMessage: String? = null,
+    onClearScanMessage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (selectedPlaylist != null) {
@@ -393,42 +401,112 @@ fun LibraryScreen(
                 // Device Audio Tab
                 val deviceTracks = allTracks.filter { it.isLocalDeviceTrack }
 
+                val filePickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenMultipleDocuments()
+                ) { uris: List<Uri> ->
+                    if (uris.isNotEmpty()) {
+                        onImportAudioFiles(uris)
+                    }
+                }
+
                 Column(modifier = Modifier.weight(1f)) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                         shape = RoundedCornerShape(14.dp)
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(14.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Scan Phone Storage",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Import MP3, FLAC & WAV files saved on your phone",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Add Songs from Phone",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Scan storage or select audio files directly (MP3, WAV, FLAC, M4A)",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
 
-                            Button(
-                                onClick = onScanDeviceAudio,
-                                colors = ButtonDefaults.buttonColors(containerColor = CyanAura),
-                                shape = RoundedCornerShape(12.dp)
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    text = "Scan",
-                                    color = Color.Black,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Button(
+                                    onClick = onScanDeviceAudio,
+                                    enabled = !isScanningDevice,
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyanAura),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (isScanningDevice) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = Color.Black,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(text = "Scanning...", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    } else {
+                                        Text(text = "🔍 Scan Storage", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        filePickerLauncher.launch(arrayOf("audio/*"))
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = "📂 Choose Files",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            if (!scanMessage.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = scanMessage,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "✕",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .clickable { onClearScanMessage() }
+                                            .padding(4.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -442,20 +520,35 @@ fun LibraryScreen(
                                 .padding(top = 40.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "📱", fontSize = 40.sp)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            ) {
+                                Text(text = "🎵", fontSize = 44.sp)
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text(
                                     text = "No device audio loaded yet",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Click 'Scan' above to find audio files stored on this device.",
+                                    text = "Tap 'Scan Storage' to automatically find music on your phone, or tap 'Choose Files' to select MP3s from any folder.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    lineHeight = 18.sp
                                 )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        filePickerLauncher.launch(arrayOf("audio/*"))
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Text("Pick Songs from Files", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     } else {

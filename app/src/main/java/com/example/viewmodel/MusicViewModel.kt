@@ -3,6 +3,7 @@ package com.example.viewmodel
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.MusicPlayerManager
@@ -99,6 +100,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     // Local device tracks
     private val _localDeviceTracks = MutableStateFlow<List<Track>>(emptyList())
     val localDeviceTracks: StateFlow<List<Track>> = _localDeviceTracks.asStateFlow()
+
+    private val _isScanningDevice = MutableStateFlow(false)
+    val isScanningDevice: StateFlow<Boolean> = _isScanningDevice.asStateFlow()
+
+    private val _scanMessage = MutableStateFlow<String?>(null)
+    val scanMessage: StateFlow<String?> = _scanMessage.asStateFlow()
 
     // Base Catalog
     private val _baseCatalog = MutableStateFlow(MusicCatalog.sampleTracks)
@@ -426,9 +433,47 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     // --- Device Music Scanner ---
     fun scanDeviceAudio() {
         viewModelScope.launch {
-            val scanned = playerManager.scanLocalDeviceAudio()
-            _localDeviceTracks.value = scanned
+            _isScanningDevice.value = true
+            _scanMessage.value = "Scanning phone storage for music..."
+            try {
+                val scanned = playerManager.scanLocalDeviceAudio()
+                _localDeviceTracks.value = scanned
+                _scanMessage.value = if (scanned.isEmpty()) {
+                    "No audio files found on device storage. You can also pick audio files directly using 'Choose Files'."
+                } else {
+                    "Found ${scanned.size} audio track(s) on your phone!"
+                }
+            } catch (e: Exception) {
+                _scanMessage.value = "Scan error: ${e.message}"
+            } finally {
+                _isScanningDevice.value = false
+            }
         }
+    }
+
+    fun importDeviceAudioFiles(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            _isScanningDevice.value = true
+            _scanMessage.value = "Importing ${uris.size} audio file(s)..."
+            try {
+                val imported = playerManager.importAudioFilesFromUris(uris)
+                val current = _localDeviceTracks.value.toMutableList()
+                val existingPaths = current.map { it.localFilePath }.toSet()
+                val newItems = imported.filter { !existingPaths.contains(it.localFilePath) }
+                current.addAll(0, newItems)
+                _localDeviceTracks.value = current
+                _scanMessage.value = "Successfully imported ${newItems.size} track(s) into your library!"
+            } catch (e: Exception) {
+                _scanMessage.value = "Import error: ${e.message}"
+            } finally {
+                _isScanningDevice.value = false
+            }
+        }
+    }
+
+    fun clearScanMessage() {
+        _scanMessage.value = null
     }
 
     // --- Cross-Platform Sync Export / Import ---

@@ -1,10 +1,16 @@
 package com.example
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -115,6 +121,34 @@ fun MusicLibreriyaApp(viewModel: MusicViewModel) {
     val showShareDialogTrack by viewModel.showShareDialogTrack.collectAsStateWithLifecycle()
     val showProfileSyncDialog by viewModel.showProfileSyncDialog.collectAsStateWithLifecycle()
     val showAudioQualityDialog by viewModel.showAudioQualityDialog.collectAsStateWithLifecycle()
+
+    val isScanningDevice by viewModel.isScanningDevice.collectAsStateWithLifecycle()
+    val scanMessage by viewModel.scanMessage.collectAsStateWithLifecycle()
+
+    // Runtime permission launcher for scanning audio
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.scanDeviceAudio()
+        } else {
+            viewModel.scanDeviceAudio() // will still attempt and fallback gracefully
+        }
+    }
+
+    val requestScanWithPermission = {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val isGranted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        if (isGranted) {
+            viewModel.scanDeviceAudio()
+        } else {
+            permissionLauncher.launch(permission)
+        }
+    }
 
     // Handle system back navigation
     BackHandler(enabled = isNowPlayingExpanded) {
@@ -294,7 +328,11 @@ fun MusicLibreriyaApp(viewModel: MusicViewModel) {
                             onAddToPlaylistClick = { track -> viewModel.openAddToPlaylist(track) },
                             onRemoveFromPlaylist = { pl, trackId -> viewModel.removeTrackFromPlaylist(pl, trackId) },
                             onShareClick = { track -> viewModel.openShareDialog(track) },
-                            onScanDeviceAudio = { viewModel.scanDeviceAudio() }
+                            onScanDeviceAudio = { requestScanWithPermission() },
+                            onImportAudioFiles = { uris -> viewModel.importDeviceAudioFiles(uris) },
+                            isScanningDevice = isScanningDevice,
+                            scanMessage = scanMessage,
+                            onClearScanMessage = { viewModel.clearScanMessage() }
                         )
                     }
 

@@ -109,29 +109,38 @@ class MusicPlayerManager(private val context: Context) {
                 // 1. Local device file / content URI if device track
                 // 2. Downloaded file in audio_downloads
                 // 3. Cached synthetic audio file
-                val audioFile: File = when {
-                    track.localFilePath != null && File(track.localFilePath).exists() -> {
-                        File(track.localFilePath)
+                val audioUri: Uri? = when {
+                    track.localFilePath?.startsWith("content://") == true -> {
+                        Uri.parse(track.localFilePath)
                     }
-                    else -> {
-                        // Check if downloaded
-                        val downloadRecord = db.musicDao().getDownload(track.id)
-                        if (downloadRecord != null && File(downloadRecord.localFilePath).exists()) {
-                            File(downloadRecord.localFilePath)
-                        } else {
-                            // Synthesize or get from cache
-                            AudioSynthesizer.getOrCreateAudioFile(
-                                context = context,
-                                trackId = track.id,
-                                genre = track.genre,
-                                durationSeconds = (track.durationMs / 1000).toInt().coerceAtLeast(60)
-                            )
-                        }
-                    }
+                    else -> null
                 }
 
+                val audioFile: File? = if (audioUri == null) {
+                    when {
+                        track.localFilePath != null && File(track.localFilePath).exists() -> {
+                            File(track.localFilePath)
+                        }
+                        else -> {
+                            // Check if downloaded
+                            val downloadRecord = db.musicDao().getDownload(track.id)
+                            if (downloadRecord != null && File(downloadRecord.localFilePath).exists()) {
+                                File(downloadRecord.localFilePath)
+                            } else {
+                                // Synthesize or get from cache
+                                AudioSynthesizer.getOrCreateAudioFile(
+                                    context = context,
+                                    trackId = track.id,
+                                    genre = track.genre,
+                                    durationSeconds = (track.durationMs / 1000).toInt().coerceAtLeast(60)
+                                )
+                            }
+                        }
+                    }
+                } else null
+
                 launch(Dispatchers.Main) {
-                    startMediaPlayer(audioFile, track)
+                    startMediaPlayer(audioFile, audioUri, track)
                 }
             } catch (e: Exception) {
                 Log.e(tag, "Failed to prepare audio track", e)
@@ -140,7 +149,7 @@ class MusicPlayerManager(private val context: Context) {
         }
     }
 
-    private fun startMediaPlayer(file: File, track: Track) {
+    private fun startMediaPlayer(file: File?, uri: Uri?, track: Track) {
         try {
             mediaPlayer?.release()
             releaseAudioEffects()
@@ -152,7 +161,13 @@ class MusicPlayerManager(private val context: Context) {
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .build()
                 )
-                setDataSource(file.absolutePath)
+                if (uri != null) {
+                    setDataSource(context, uri)
+                } else if (file != null) {
+                    setDataSource(file.absolutePath)
+                } else {
+                    throw IllegalStateException("Neither file nor Uri provided for playback")
+                }
                 setOnPreparedListener { mp ->
                     _isBuffering.value = false
                     _durationMs.value = mp.duration.toLong()
@@ -450,58 +465,113 @@ class MusicPlayerManager(private val context: Context) {
                 MediaStore.Audio.Media.ARTIST,
                 MediaStore.Audio.Media.ALBUM,
                 MediaStore.Audio.Media.DURATION,
-                MediaStore.Audio.Media.DATA
+                MediaStore.Audio.Media.SIZE
             )
-            val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+            // Query without strict is_music flag to catch all playable device audio
+            val selection = "${MediaStore.Audio.Media.DURATION} >= ?"
+            val selectionArgs = arrayOf("3000") // 3+ seconds
+
             val cursor = context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 projection,
                 selection,
-                null,
+                selectionArgs,
                 "${MediaStore.Audio.Media.TITLE} ASC"
             )
 
             cursor?.use {
-                val idCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                val titleCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                val artistCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                val albumCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-                val durCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-                val dataCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val idCol = it.getColumnIndex(MediaStore.Audio.Media._ID)
+                val titleCol = it.getColumnIndex(MediaStore.Audio.Media.TITLE)
+                val artistCol = it.getColumnIndex(MediaStore.Audio.Media.ARTIST)
+                val albumCol = it.getColumnIndex(MediaStore.Audio.Media.ALBUM)
+                val durCol = it.getColumnIndex(MediaStore.Audio.Media.DURATION)
+                val sizeCol = it.getColumnIndex(MediaStore.Audio.Media.SIZE)
 
                 while (it.moveToNext()) {
-                    val id = it.getLong(idCol)
-                    val title = it.getString(titleCol) ?: "Unknown"
-                    val artist = it.getString(artistCol) ?: "Unknown Artist"
-                    val album = it.getString(albumCol) ?: "Local Audio"
-                    val duration = it.getLong(durCol)
-                    val dataPath = it.getString(dataCol)
+                    val id = if (idCol >= 0) it.getLong(idCol) else continue
+                    val title = if (titleCol >= 0) it.getString(titleCol) ?: "Unknown Track" else "Unknown Track"
+                    val artist = if (artistCol >= 0) it.getString(artistCol) ?: "Unknown Artist" else "Unknown Artist"
+                    val album = if (albumCol >= 0) it.getString(albumCol) ?: "Local Audio" else "Local Audio"
+                    val duration = if (durCol >= 0) it.getLong(durCol) else 0L
+                    val fileSize = if (sizeCol >= 0) it.getLong(sizeCol) else 0L
 
-                    if (duration > 10000) { // filter out short notifications
-                        localTracks.add(
-                            Track(
-                                id = "local_$id",
-                                title = title,
-                                artist = artist,
-                                album = album,
-                                durationMs = duration,
-                                localFilePath = dataPath,
-                                isDownloaded = true,
-                                genre = "Local Device",
-                                coverGradientStart = 0xFF6366F1,
-                                coverGradientEnd = 0xFF14B8A6,
-                                iconCategory = "phone",
-                                audioFormat = "Device Audio",
-                                isLocalDeviceTrack = true
-                            )
+                    val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+
+                    localTracks.add(
+                        Track(
+                            id = "local_$id",
+                            title = title,
+                            artist = if (artist.equals("<unknown>", ignoreCase = true)) "Unknown Artist" else artist,
+                            album = if (album.equals("<unknown>", ignoreCase = true)) "Local Audio" else album,
+                            durationMs = if (duration > 0) duration else 180000L,
+                            localFilePath = contentUri.toString(),
+                            isDownloaded = true,
+                            fileSizeBytes = fileSize,
+                            genre = "Local Device",
+                            coverGradientStart = 0xFF6366F1,
+                            coverGradientEnd = 0xFF14B8A6,
+                            iconCategory = "phone",
+                            audioFormat = "Device Audio",
+                            isLocalDeviceTrack = true
                         )
-                    }
+                    )
                 }
             }
         } catch (e: Exception) {
             Log.w(tag, "Error querying MediaStore: ${e.message}")
         }
         return localTracks
+    }
+
+    // Import audio files selected from SAF file picker
+    suspend fun importAudioFilesFromUris(uris: List<Uri>): List<Track> {
+        val imported = mutableListOf<Track>()
+        for (uri in uris) {
+            try {
+                var title = "Audio File"
+                var size = 0L
+
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameCol = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        val sizeCol = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                        if (nameCol >= 0) {
+                            title = it.getString(nameCol) ?: "Audio File"
+                        }
+                        if (sizeCol >= 0) {
+                            size = it.getLong(sizeCol)
+                        }
+                    }
+                }
+
+                // Strip extension for title display
+                val cleanTitle = title.substringBeforeLast(".")
+                val trackId = "imported_${System.currentTimeMillis()}_${imported.size}"
+
+                imported.add(
+                    Track(
+                        id = trackId,
+                        title = cleanTitle,
+                        artist = "Imported Audio",
+                        album = "My Files",
+                        durationMs = 180000L, // will update on playback
+                        localFilePath = uri.toString(),
+                        isDownloaded = true,
+                        fileSizeBytes = size,
+                        genre = "Local Device",
+                        coverGradientStart = 0xFF06B6D4,
+                        coverGradientEnd = 0xFF3B82F6,
+                        iconCategory = "phone",
+                        audioFormat = "Device Audio",
+                        isLocalDeviceTrack = true
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w(tag, "Failed to import URI: $uri", e)
+            }
+        }
+        return imported
     }
 
     fun release() {
