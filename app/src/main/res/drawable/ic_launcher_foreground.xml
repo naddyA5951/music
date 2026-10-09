@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Group centered strictly within 66dp safe zone (31,31 to 77,77) -->
+    <group
+        android:translateX="0"
+        android:translateY="0">
+
+        <!-- Glowing Aura / Accent Disc -->
+        <path
+            android:pathData="M 54,34 A 20,20 0 1 1 53.9,34 Z"
+            android:strokeWidth="2.5"
+            android:fillColor="#00000000">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:startX="34"
+                    android:startY="34"
+                    android:endX="74"
+                    android:endY="74"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#F43F5E" />
+                    <item android:offset="0.5" android:color="#A855F7" />
+                    <item android:offset="1.0" android:color="#38BDF8" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Headphone Arch -->
+        <path
+            android:pathData="M 36,54 C 36,44.06 44.06,36 54,36 C 63.94,36 72,44.06 72,54"
+            android:strokeWidth="4"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+
+        <!-- Left Ear Cup -->
+        <path
+            android:pathData="M 33,52 L 36,52 A 3,3 0 0 1 39,55 L 39,63 A 3,3 0 0 1 36,66 L 33,66 A 3,3 0 0 1 30,63 L 30,55 A 3,3 0 0 1 33,52 Z"
+            android:fillColor="#FFFFFF" />
+
+        <!-- Right Ear Cup -->
+        <path
+            android:pathData="M 72,52 L 75,52 A 3,3 0 0 1 78,55 L 78,63 A 3,3 0 0 1 75,66 L 72,66 A 3,3 0 0 1 69,63 L 69,55 A 3,3 0 0 1 72,52 Z"
+            android:fillColor="#FFFFFF" />
+
+        <!-- Sound Waves / Equalizer Bars in Center -->
+        <!-- Bar 1 (Left) -->
+        <path
+            android:pathData="M 44,52 L 44,60"
+            android:strokeWidth="2.8"
+            android:strokeColor="#FB7185"
+            android:strokeLineCap="round" />
+        <!-- Bar 2 (Mid-Left) -->
+        <path
+            android:pathData="M 49,47 L 49,65"
+            android:strokeWidth="2.8"
+            android:strokeColor="#C084FC"
+            android:strokeLineCap="round" />
+        <!-- Bar 3 (Center) -->
+        <path
+            android:pathData="M 54,43 L 54,69"
+            android:strokeWidth="2.8"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round" />
+        <!-- Bar 4 (Mid-Right) -->
+        <path
+            android:pathData="M 59,48 L 59,64"
+            android:strokeWidth="2.8"
+            android:strokeColor="#C084FC"
+            android:strokeLineCap="round" />
+        <!-- Bar 5 (Right) -->
+        <path
+            android:pathData="M 64,53 L 64,59"
+            android:strokeWidth="2.8"
+            android:strokeColor="#38BDF8"
+            android:strokeLineCap="round" />
+
+        <!-- Bottom Accent Musical Dot -->
+        <path
+            android:pathData="M 54,74 A 1.5,1.5 0 1 1 53.9,74 Z"
+            android:fillColor="#F43F5E" />
+    </group>
+</vector>

@@ -1,0 +1,6 @@
+{
+  "name": "Music Libreriya",
+  "description": "High-fidelity audiophile music player with custom playlists, offline download playback, synchronized lyrics, built-in graphic equalizer, and cross-platform profile syncing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
